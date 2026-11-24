@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Vice City Mobile</title>
+<style>
+*{box-sizing:border-box}body{margin:0;overflow:hidden;background:#101827;font-family:Arial;color:white}
+#game{position:fixed;inset:0}canvas{display:block}
+#hud{position:fixed;inset:0;pointer-events:none}
+#top{position:absolute;top:12px;left:12px;background:#07111dcc;padding:10px 14px;border:1px solid #ffffff33;border-radius:12px;font-weight:bold}
+#mission{position:absolute;top:12px;right:12px;background:#07111dcc;padding:10px 14px;border:1px solid #ffffff33;border-radius:12px;max-width:48%;font-size:13px}
+#help{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#07111dcc;padding:10px 14px;border-radius:10px;text-align:center;font-size:13px;display:none}
+#controls{position:absolute;bottom:18px;left:0;right:0;display:flex;justify-content:space-between;align-items:end;padding:0 18px;pointer-events:none}
+#stick{width:130px;height:130px;border-radius:50%;background:#ffffff24;border:2px solid #ffffff66;position:relative;pointer-events:auto;touch-action:none}
+#nub{width:52px;height:52px;border-radius:50%;background:#ffffffaa;position:absolute;left:37px;top:37px}
+.buttons{display:grid;grid-template-columns:repeat(2,70px);gap:9px;pointer-events:auto}
+button{border:1px solid #ffffff77;background:#101c30dd;color:white;border-radius:14px;padding:13px 7px;font-weight:bold;font-size:12px;min-height:52px;touch-action:none}
+button:active{background:#ff6b35}
+#toast{position:absolute;bottom:165px;left:50%;transform:translateX(-50%);background:#07111ddd;padding:9px 14px;border-radius:10px;font-size:13px;white-space:nowrap}
+@media(min-width:800px){#controls{padding:25px 45px}#stick{width:150px;height:150px}#nub{left:47px;top:47px}}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="hud">
+ <div id="top">VICE CITY<br><span id="cash">$ 500</span> · ⭐ <span id="wanted">0</span></div>
+ <div id="mission">ЗАДАНИЕ 1<br>Доберись до светящейся точки</div>
+ <div id="help">Нажми «Войти» рядом с машиной</div>
+ <div id="toast">Исследуй город!</div>
+ <div id="controls">
+  <div id="stick"><div id="nub"></div></div>
+  <div class="buttons">
+   <button id="enter">Войти<br>в авто</button><button id="jump">Прыжок</button>
+   <button id="action">Действие</button><button id="run">Бежать</button>
+  </div>
+ </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+(() => {
+const root=document.getElementById('game');
+if(!window.THREE){root.innerHTML='<div style="padding:25px">Для игры нужен интернет: не удалось загрузить 3D-библиотеку.</div>';return;}
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x83c9e8); scene.fog=new THREE.Fog(0x83c9e8,75,230);
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,500);
+const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setSize(innerWidth,innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio,1.7)); root.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xffffff,0x526078,2));
+const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(-40,80,30);scene.add(sun);
+const mat=(c)=>new THREE.MeshStandardMaterial({color:c,roughness:.82});
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(500,500),mat(0x65a66a));ground.rotation.x=-Math.PI/2;ground.position.y=-.12;scene.add(ground);
+const roadMat=mat(0x30343a),lineMat=mat(0xf4e6a0),sideMat=mat(0xb9b8ad);
+function road(x,z,w,d){let m=new THREE.Mesh(new THREE.BoxGeometry(w,.12,d),roadMat);m.position.set(x,0,z);scene.add(m);
+ if(w>d){for(let i=-w/2+4;i<w/2;i+=8){let l=new THREE.Mesh(new THREE.BoxGeometry(3,.025,.16),lineMat);l.position.set(x+i,.071,z);scene.add(l)}}
+ else{for(let i=-d/2+4;i<d/2;i+=8){let l=new THREE.Mesh(new THREE.BoxGeometry(.16,.025,3),lineMat);l.position.set(x,.071,z+i);scene.add(l)}}
+}
+for(let i=-4;i<=4;i++){road(i*42,0,13,420);road(0,i*42,420,13)}
+// blocks of colorful buildings, leaving streets clear
+const colors=[0xf1a36b,0xe8d6b5,0x9fb9c8,0xe6b6c5,0xd9c77c,0xb4c8a6,0xb1a5c9];
+for(let x=-4;x<=4;x++)for(let z=-4;z<=4;z++){
+ if(Math.abs(x)>3||Math.abs(z)>3)continue;
+ const bx=x*42+21,bz=z*42+21;
+ const h=8+Math.random()*23,w=17+Math.random()*8,d=17+Math.random()*8;
+ const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(colors[Math.floor(Math.random()*colors.length)]));
+ b.position.set(bx,h/2,bz);scene.add(b);
+ const roof=new THREE.Mesh(new THREE.BoxGeometry(w+.3,.45,d+.3),mat(0x555b63));roof.position.set(bx,h+.2,bz);scene.add(roof);
+ // windows
+ for(let yy=3;yy<h-1;yy+=3)for(let xx=-w/2+2;xx<w/2-1;xx+=4){
+  const win=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.2,.08),mat(0x8bd5e8));win.position.set(bx+xx,yy,bz-d/2-.05);scene.add(win);
+ }
+}
+// palm trees
+for(let i=0;i<70;i++){let x=(Math.random()-.5)*350,z=(Math.random()-.5)*350;if(Math.abs(x%42)<10||Math.abs(z%42)<10)continue;
+ let trunk=new THREE.Mesh(new THREE.CylinderGeometry(.25,.4,5,7),mat(0x80552f));trunk.position.set(x,2.5,z);scene.add(trunk);
+ for(let j=0;j<6;j++){let leaf=new THREE.Mesh(new THREE.ConeGeometry(.55,5,5),mat(0x237447));leaf.position.set(x+Math.cos(j*Math.PI/3)*1.5,5.2,z+Math.sin(j*Math.PI/3)*1.5);leaf.rotation.z=-Math.PI/2;leaf.rotation.y=j*Math.PI/3;scene.add(leaf)}
+}
+// character
+const player=new THREE.Group();scene.add(player);
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.48,.9,4,8),mat(0x2864c7));body.position.y=1.15;player.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.34,12,10),mat(0xd9a078));head.position.y=2;player.add(head);
+const legs=new THREE.Mesh(new THREE.BoxGeometry(.65,.65,.42),mat(0x252b38));legs.position.y=.35;player.add(legs);
+player.position.set(0,0,8);
+// car
+const car=new THREE.Group();scene.add(car);
+const chassis=new THREE.Mesh(new THREE.BoxGeometry(2.2,.65,4),mat(0xd92e4b));chassis.position.y=.75;car.add(chassis);
+const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.65,.8,1.9),mat(0x8bd3e8));cabin.position.set(0,1.42,-.25);car.add(cabin);
+for(const x of [-1,1])for(const z of [-1.25,1.25]){let wh=new THREE.Mesh(new THREE.CylinderGeometry(.38,.38,.25,14),mat(0x17191d));wh.rotation.z=Math.PI/2;wh.position.set(x,.4,z);car.add(wh)}
+car.position.set(4,0,8);
+// mission marker
+const marker=new THREE.Group();scene.add(marker);marker.position.set(85,0,85);
+const ring=new THREE.Mesh(new THREE.TorusGeometry(3,.35,8,32),new THREE.MeshBasicMaterial({color:0xffdf3d}));ring.rotation.x=Math.PI/2;ring.position.y=.3;marker.add(ring);
+const beam=new THREE.Mesh(new THREE.CylinderGeometry(.25,.25,8,12),new THREE.MeshBasicMaterial({color:0xffdf3d,transparent:true,opacity:.35}));beam.position.y=4;marker.add(beam);
+let inCar=false,cash=500,wanted=0,missionDone=false,run=false,jump=0;
+const cashEl=document.getElementById('cash'),wantedEl=document.getElementById('wanted'),missionEl=document.getElementById('mission'),toast=document.getElementById('toast');
+function say(s){toast.textContent=s;toast.style.display='block';clearTimeout(say.t);say.t=setTimeout(()=>toast.style.display='none',2400)}
+// joystick
+const stick=document.getElementById('stick'),nub=document.getElementById('nub');let joy={x:0,y:0},drag=false;
+function setJoy(e){let r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=e.clientX-cx,dy=e.clientY-cy,len=Math.hypot(dx,dy),max=43;if(len>max){dx=dx/len*max;dy=dy/len*max}joy.x=dx/max;joy.y=dy/max;nub.style.transform=`translate(${dx}px,${dy}px)`}
+stick.addEventListener('pointerdown',e=>{drag=true;stick.setPointerCapture(e.pointerId);setJoy(e)});
+stick.addEventListener('pointermove',e=>{if(drag)setJoy(e)});
+function reset(){drag=false;joy={x:0,y:0};nub.style.transform='translate(0,0)'}
+stick.addEventListener('pointerup',reset);stick.addEventListener('pointercancel',reset);
+document.getElementById('run').onclick=()=>{run=!run;say(run?'Бег включён':'Обычная скорость')};
+document.getElementById('jump').onclick=()=>{if(!inCar){jump=.45;say('Прыжок!')}};
+document.getElementById('enter').onclick=()=>{
+ if(!inCar&&player.position.distanceTo(car.position)<5){inCar=true;player.visible=false;say('Ты сел в машину!')}
+ else if(inCar){inCar=false;player.visible=true;player.position.copy(car.position);player.position.x+=3;say('Ты вышел из машины')}
+ else say('Подойди ближе к машине');
+};
+document.getElementById('action').onclick=()=>{if(!missionDone&&player.position.distanceTo(marker.position)<7){missionDone=true;cash+=1000;cashEl.textContent='$ '+cash;missionEl.innerHTML='ЗАДАНИЕ ВЫПОЛНЕНО<br>Награда: $1000';marker.visible=false;say('Миссия выполнена! +$1000')}else say('Пока здесь нечего делать')};
+const keys={};addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key==='e')document.getElementById('enter').click();if(e.key===' ')document.getElementById('jump').click()});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+let last=performance.now();
+function loop(now){requestAnimationFrame(loop);let dt=Math.min((now-last)/1000,.04);last=now;
+ let forward=-joy.y+(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0);
+ let side=joy.x+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
+ const target=inCar?car:player;let speed=inCar?17:(run?9:5);
+ if(inCar){car.rotation.y-=side*dt*1.8;car.translateZ(-forward*speed*dt)}
+ else{player.rotation.y=Math.atan2(side,-forward)||player.rotation.y;player.translateZ(-forward*speed*dt);player.position.x+=side*speed*dt*.65;if(jump>0){player.position.y=jump;jump-=dt*1.5}else player.position.y=0}
+ target.position.x=THREE.MathUtils.clamp(target.position.x,-190,190);target.position.z=THREE.MathUtils.clamp(target.position.z,-190,190);
+ marker.rotation.y+=dt*.8;
+ let focus=inCar?car.position:player.position;
+ let desired=new THREE.Vector3(focus.x+Math.sin(target.rotation.y)*9,focus.y+6,focus.z+Math.cos(target.rotation.y)*9);
+ camera.position.lerp(desired,1-Math.pow(.001,dt));camera.lookAt(focus.x,focus.y+1,focus.z);
+ if(!missionDone&&focus.distanceTo(marker.position)<7){missionEl.innerHTML='ЗАДАНИЕ 1<br>Нажми «Действие»'}else if(!missionDone){missionEl.innerHTML='ЗАДАНИЕ 1<br>Доберись до светящейся точки'}
+ document.getElementById('help').style.display=(!inCar&&player.position.distanceTo(car.position)<5)?'block':'none';
+ renderer.render(scene,camera);
+}
+requestAnimationFrame(loop);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+})();
+</script>
+</body>
+</html>
